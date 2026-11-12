@@ -1,9 +1,9 @@
 <!-- Copyright (c) 2026, NVIDIA CORPORATION.
 SPDX-License-Identifier: BSD-3-Clause -->
 
-# perf(io): reuse local index readers and descriptor sizes
+# perf(index): reuse readers and avoid redundant metadata queries
 
-[Code branch](https://github.com/asolergi-nv/Megatron-Energon/tree/review/startup-07-index-reader-reuse) · [Review changes](https://github.com/asolergi-nv/Megatron-Energon/compare/c78d47025cd2c3617fc508007353095ce9c883bf...41c322db694bb56b7d205a472c1223e03026368c)
+[Draft PR #348](https://github.com/NVIDIA/Megatron-Energon/pull/348) · [Code branch](https://github.com/asolergi-nv/Megatron-Energon/tree/review/startup-07-index-reader-reuse)
 
 Implementation commit: `41c322db694bb56b7d205a472c1223e03026368c`.
 
@@ -11,42 +11,35 @@ Implementation commit: `41c322db694bb56b7d205a472c1223e03026368c`.
 
 ## What does this PR do?
 
-Obtain an eligible local index stream's size from its open descriptor and reuse bounded index readers for repeated offsets in the same file. Other storage backends keep the original metadata lookup.
+Reduce repeated opens and metadata queries when reading JSONL and tar offset indexes.
 
-## Dependencies
+An offset-cache miss can currently open another reader even when the cache already holds one for the same index file. Reuse that reader instead: the existing lookup logic seeks to the requested offset and refreshes its lookahead. JSONL readers reuse an entry from their single-file cache; tar readers reuse an entry only when its file matches. The existing cache bound and reader cleanup remain in place.
 
-No dependency on another pending optimization. The branch starts from the current target base.
+Index readers also obtain the file length from the descriptor they have just opened, using `fstat`, when the stream is an exact MSC POSIX file without a metadata provider. Other streams retain their authoritative path-based size lookup. A failed size lookup closes the newly opened stream.
 
-## Performance evidence
+## Performance
 
-3 fresh-process trials per configuration; first next() 42.60s -> 34.84s; setup + loader 50.96s -> 42.56s.
+- First-batch wait: **42.60 → 34.84 seconds**, about **7.76 seconds saved (18%)**. Setup plus loader time to the first batch: **50.96 → 42.56 seconds**, about **8.40 seconds saved**.
+- Worker storage-client opens: **15,301 → 5,371**. Index path-metadata queries: **12,478 → 0**, with **2,548 descriptor-size checks** instead.
 
-These are adjacent-stage measurements from the previously validated, pinned standalone-loader implementation. They are not fresh timings of this branch on the updated target base. Backend comparisons retain all other selected optimizations. No large-scale extrapolation is claimed.
-
-Worker index metadata queries: 12,478 → 0; index reader creations: 12,478 → 2,548; storage-client opens: 15,301 → 5,371. Descriptor fstat calls become 2,548. These are instrumented API counts, not filesystem RPC counts; overlapping categories must not be added.
-
-## Validation
-
-- `just fix`: PASS.
-- `just check`: PASS.
-- `bwrap --bind / / --dev-bind /dev /dev --tmpfs /tmp --unshare-net just test`: PASS (Ran 227 tests in 646.926s; OK).
-- `just check-commits`: PASS (one signed-off Conventional Commit).
-
-Earlier standalone-loader evidence: exact tokens, masks, lengths, source identities and pixels across the selected stack; 64-batch comparisons and fresh-process dataloader restore checks for the final stack. That evidence does not establish full training-process interruption/restart correctness, nor replace branch CI after integration changes.
-
-## Review decisions before merging
-
-Native Energon patch. Only exact eligible MSC POSIX streams without a metadata provider use descriptor sizing. Other streams retain their original authoritative size lookup. No storage-client library change is proposed.
+Timings are medians of three fresh-process runs of the validated downstream prototype, not new measurements of this public branch. I/O figures are separately instrumented API calls, not filesystem RPC counts.
 
 ## Linked issue
 
-No new issue has been opened. Link the relevant issue if repository contribution policy requires one before submission.
+Related to [#331](https://github.com/NVIDIA/Megatron-Energon/issues/331).
+
+## Testing
+
+Validation of this implementation commit:
+
+- `just fix`, `just check`, and `just check-commits`: passed.
+- `bwrap --bind / / --dev-bind /dev /dev --tmpfs /tmp --unshare-net just test`: **227 tests passed**. Private temporary and network namespaces isolate the upstream test fixtures.
+- The added test exercises random and interleaved offsets, cache bounds, reader closure, metadata-provider and non-POSIX fallbacks, and sizing an open file after its path is replaced.
 
 ## Checklist
 
 - [ ] No code was copied from other repositories or projects; the whole change can be contributed under this project's BSD-3-Clause license (human attestation).
-- [ ] Tests cover the final agreed API and lifecycle.
+- [x] Tests cover the change.
 - [x] Documentation in `docs/source` is updated.
 - [x] `just check` passes.
 - [x] All commits follow Conventional Commits and are signed off.
-- [ ] Required CI passes on the final submitted revision.
