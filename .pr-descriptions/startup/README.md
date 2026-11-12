@@ -7,7 +7,7 @@ Proposed descriptions for review. Implementation branches retain their validated
 
 | Change | Code branch | Changes | Description |
 |---|---|---|---|
-| 02-supplementary-metadata | [Branch](https://github.com/asolergi-nv/Megatron-Energon/tree/review/startup-02-supplementary-metadata) | [Diff](https://github.com/asolergi-nv/Megatron-Energon/compare/c78d47025cd2c3617fc508007353095ce9c883bf...975efcc067010df6a8cf020ca8a0e2cdb3901cc5) | [Proposed description](02-supplementary-metadata.md) |
+| [02-supplementary-metadata — PR #349](https://github.com/NVIDIA/Megatron-Energon/pull/349) | [Branch](https://github.com/asolergi-nv/Megatron-Energon/tree/review/startup-02-supplementary-metadata) | [Diff](https://github.com/asolergi-nv/Megatron-Energon/compare/c78d47025cd2c3617fc508007353095ce9c883bf...975efcc067010df6a8cf020ca8a0e2cdb3901cc5) | [Proposed description](02-supplementary-metadata.md) |
 | [07-index-reader-reuse — PR #348](https://github.com/NVIDIA/Megatron-Energon/pull/348) | [Branch](https://github.com/asolergi-nv/Megatron-Energon/tree/review/startup-07-index-reader-reuse) | [Diff](https://github.com/asolergi-nv/Megatron-Energon/compare/c78d47025cd2c3617fc508007353095ce9c883bf...41c322db694bb56b7d205a472c1223e03026368c) | [Proposed description](07-index-reader-reuse.md) |
 | [09-construction-snapshot — PR #342](https://github.com/NVIDIA/Megatron-Energon/pull/342) | [Branch](https://github.com/asolergi-nv/Megatron-Energon/tree/perf/constructor-metadata-snapshot) | [Diff](https://github.com/asolergi-nv/Megatron-Energon/compare/c78d47025cd2c3617fc508007353095ce9c883bf...861048606a27d8203a6bf6b052933e7d4b46242c) | [Proposed description](09-construction-snapshot.md) |
 

@@ -3,7 +3,7 @@ SPDX-License-Identifier: BSD-3-Clause -->
 
 # feat(metadata): add opt-in supplementary metadata lookup
 
-[Code branch](https://github.com/asolergi-nv/Megatron-Energon/tree/review/startup-02-supplementary-metadata) · [Review changes](https://github.com/asolergi-nv/Megatron-Energon/compare/c78d47025cd2c3617fc508007353095ce9c883bf...975efcc067010df6a8cf020ca8a0e2cdb3901cc5)
+[Draft PR #349](https://github.com/NVIDIA/Megatron-Energon/pull/349) · [Code branch](https://github.com/asolergi-nv/Megatron-Energon/tree/review/startup-02-supplementary-metadata) · [Review changes](https://github.com/asolergi-nv/Megatron-Energon/compare/c78d47025cd2c3617fc508007353095ce9c883bf...975efcc067010df6a8cf020ca8a0e2cdb3901cc5)
 
 Implementation commit: `975efcc067010df6a8cf020ca8a0e2cdb3901cc5`.
 
@@ -25,7 +25,7 @@ These are adjacent-stage measurements from the previously validated, pinned stan
 
 Covered media opens for dimension discovery: 1,549 → 0. Media payload reads during actual sample processing remain. Offline metadata preparation is amortized, not eliminated. No clear first-batch latency improvement was measured at this scale.
 
-## Validation
+## Testing
 
 - `just fix`: PASS.
 - `just check`: PASS.
@@ -34,13 +34,13 @@ Covered media opens for dimension discovery: 1,549 → 0. Media payload reads du
 
 Earlier standalone-loader evidence: exact tokens, masks, lengths, source identities and pixels across the selected stack; 64-batch comparisons and fresh-process dataloader restore checks for the final stack. That evidence does not establish full training-process interruption/restart correctness, nor replace branch CI after integration changes.
 
-## Review decisions before merging
+## Draft integration status
 
-Preserves the tested process-wide lookup adapter. Review the permanent FileStore/config API, initialization in spawned workers, and lifecycle of published immutable indexes before merging. The selected benchmark used complete indexes only; optional observed-key support is retained but was not enabled.
+This draft preserves the tested process-wide lookup adapter; it is not ready to merge. Review the permanent FileStore/config API, initialization in spawned workers, and lifecycle of published immutable indexes before merging. The selected benchmark used complete indexes only; optional observed-key support is retained but was not enabled.
 
 ## Linked issue
 
-No new issue has been opened. Link the relevant issue if repository contribution policy requires one before submission.
+Related to [#331](https://github.com/NVIDIA/Megatron-Energon/issues/331).
 
 ## Checklist
 
