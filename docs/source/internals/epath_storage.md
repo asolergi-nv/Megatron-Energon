@@ -40,37 +40,73 @@ open file, stream, or memory map into dataset configuration or checkpoint state.
 
 ## Frozen construction metadata
 
-Applications may prepare a versioned metadata package for a frozen dataset
-revision and serve it while constructing a loader:
+For an immutable dataset revision, capture the metadata used by dataset construction
+once, validate it once at job startup, and distribute the validated object to the
+processes building loaders. Sample/media payloads and binary indexes remain outside
+the snapshot. This is a construction cache, not a checkpoint of sampler or packing state.
 
 ```python
+import json
+from pathlib import Path
+from megatron.energon import WorkerConfig, get_train_dataset, get_val_dataset
 from megatron.energon.epathlib.metadata_snapshot import (
-    MetadataSnapshot,
-    use_metadata_snapshot,
+    MetadataSnapshot, capture_metadata, use_metadata_snapshot,
 )
 
-snapshot = MetadataSnapshot.load(
-    "/local/loader-metadata.json",
-    sha256=expected_digest,
-    recipe_identity=expected_recipe_identity,
-)
-with use_metadata_snapshot(snapshot):
-    dataset = build_dataset()
-# Start iteration and workers only after leaving the context.
+recipe = "/data/versioned-dataset/recipe.yaml"
+package = Path("/local/metadata.json")  # Parent directory must already exist.
+worker = WorkerConfig(rank=0, world_size=1, num_workers=0)
+
+# Offline preparation: include every split the job will construct, without iteration.
+with capture_metadata(package, recipe_identity="dataset-release-1"):
+    get_train_dataset(recipe, worker_config=worker, batch_size=1,
+                      shuffle_buffer_size=None, max_samples_per_sequence=None)
+    get_val_dataset(recipe, worker_config=worker, batch_size=1)
+audit = json.loads(Path(str(package) + ".audit.json").read_text())
+
+# Run this live preflight once per job, outside capture/replay contexts.
+validated = MetadataSnapshot.load(
+    package, sha256=audit["snapshot_sha256"], recipe_identity="dataset-release-1",
+).validate()
+
+# Applications may serialize validated to their workers through their control plane.
+with use_metadata_snapshot(validated) as coverage:
+    dataset = get_train_dataset(recipe, worker_config=worker, batch_size=1,
+                                shuffle_buffer_size=None, max_samples_per_sequence=None)
+print(coverage.hits, coverage.misses, coverage.passthrough_opens)
+# Start loader iteration after leaving the construction scope.
 ```
 
-Version 1 packages contain `format_version`, `recipe_identity`, base64-encoded
-`contents`, and maps named `file_checks`, `sizes`, and `jsonl_sizes`. Keys are
-logical EPath strings; `jsonl_sizes` contains terminal byte offsets. A producer
-must capture these values from the intended immutable dataset revision. The
-loader rejects a mismatched package digest or recipe identity.
+Capture uses native EPath/JSONL hooks and writes a format-2 package with its audit at
+`<complete package filename>.audit.json`. The digest covers the recorded contents,
+file-existence checks, sizes, JSONL terminal offsets, recipe identity and DSS root.
+An invalid destination fails before construction; a failed constructor publishes
+nothing. Each output file is replaced atomically. A crash between the two replacements
+can leave an old audit, which the digest check rejects. Version-1 packages must be
+recaptured.
 
-Recorded reads receive independent streams. Unrecorded paths retain their normal
-storage backend. Leaving the context restores ordinary access, including after
-an exception. Keep media payloads outside the package and rebuild it after any
-metadata revision. Digest validation identifies the selected package; it does not
-check whether source files have changed. Applications own capture, distribution,
-and snapshot selection; this API does not provide an automatic cache or launcher.
+`validate()` checks all captured metadata against live storage: recipe and metadata
+bytes, file existence and sizes, JSONL terminal offsets, and `.nv-meta/index.uuid`
+when available. It binds `dss://` resolution to the effective `NVDATASET_CACHE_DIR`.
+It does not read every sample or hash all binary indexes. Same-size edits to sample
+payloads, or index changes that preserve the checked offsets/generation, remain outside
+this validation. Keep the entire dataset revision immutable from capture through the
+job, and regenerate indexes and snapshots when publishing a new revision. A package
+checksum alone is not evidence that the dataset is current.
+
+Replay requires the result of preflight and rejects missing metadata keys rather than
+silently returning an old or partially cached construction. Capture training and
+validation together, using the same paths, storage configuration, Energon version and
+constructor options as the job. Different ranks may reuse the same validated object.
+Uncached binary/sample opens are counted separately; strict coverage does not forbid
+normal sample I/O after construction. The snapshot cannot remain active in forked
+children, and leaving the context restores ordinary reads even after an exception.
+
+Energon owns capture, the package format, live validation, scoped replay and worker
+isolation. The application owns immutable revision selection, job-level coordination,
+distribution, configuration and checkpoint compatibility. A validated object is valid
+only for the current job: do not save it in a training checkpoint or reuse it to skip
+preflight after an interruption.
 
 ## Worker and cache ownership
 
